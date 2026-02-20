@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ronix iOS Direct Installs</title>
+
+    <style>
+        :root {
+            --primary: #6366f1;
+            --accent: #a855f7;
+            --bg-dark: #030712;
+            --glass: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --text-main: #f8fafc;
+            --text-dim: #64748b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            background-image: 
+                radial-gradient(circle at 50% -20%, rgba(99, 102, 241, 0.2), transparent 80%),
+                radial-gradient(circle at 0% 100%, rgba(168, 85, 247, 0.1), transparent 50%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 20px;
+            color: var(--text-main);
+            overflow-x: hidden;
+        }
+
+        /* Initial Loading Screen */
+        #loader {
+            position: fixed;
+            inset: 0;
+            background: var(--bg-dark);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.8s;
+        }
+
+        /* Installation Progress Overlay */
+        #install-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(3, 7, 18, 0.8);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.4s ease, visibility 0.4s;
+        }
+
+        #install-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .spinner-container {
+            position: relative;
+            width: 50px;
+            height: 50px;
+            margin-bottom: 20px;
+        }
+
+        .spinner {
+            position: absolute;
+            inset: 0;
+            border: 2px solid transparent;
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s cubic-bezier(0.76, 0, 0.3, 1) infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .install-text {
+            font-size: 0.9rem;
+            color: var(--text-main);
+            font-weight: 500;
+            letter-spacing: 0.02em;
+        }
+
+        .loaded #loader {
+            opacity: 0;
+            visibility: hidden;
+        }
+
+        /* Main Card */
+        .card {
+            background: var(--glass);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 28px;
+            padding: 40px 24px;
+            width: 100%;
+            max-width: 500px;
+            text-align: center;
+            box-shadow: 
+                0 0 0 1px var(--glass-border),
+                0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            
+            opacity: 0;
+            transform: translateY(30px) scale(0.95);
+            transition: opacity 1s cubic-bezier(0.16, 1, 0.3, 1), 
+                        transform 1s cubic-bezier(0.16, 1, 0.3, 1);
+            
+            margin-top: 20px;
+            margin-bottom: 40px;
+        }
+
+        .loaded .card {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+
+        .logo-container {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 24px;
+        }
+
+        .logo-glow {
+            position: absolute;
+            inset: -8px;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            filter: blur(15px);
+            opacity: 0.3;
+            border-radius: 35px;
+            animation: logo-pulse 3s infinite alternate cubic-bezier(0.45, 0.05, 0.55, 0.95);
+        }
+
+        @keyframes logo-pulse {
+            from { transform: scale(0.9); opacity: 0.2; }
+            to { transform: scale(1.1); opacity: 0.4; }
+        }
+
+        .logo {
+            position: relative;
+            width: 100px;
+            height: 100px;
+            border-radius: 28px;
+            object-fit: cover;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            margin-bottom: 8px;
+            background: linear-gradient(to bottom, #fff, #94a3b8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            color: var(--text-dim);
+            margin-bottom: 32px;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+
+        @media (min-width: 400px) {
+            .grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .install-btn {
+            position: relative;
+            padding: 18px 12px;
+            border-radius: 18px;
+            text-decoration: none;
+            color: white;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--glass-border);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), 
+                        background 0.3s ease, 
+                        border-color 0.3s ease;
+            z-index: 1;
+            cursor: pointer;
+        }
+
+        .install-btn:active {
+            transform: scale(0.92);
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--primary);
+        }
+
+        .ripple {
+            position: absolute;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.5) 0%, transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+            transform: scale(0);
+            animation: ripple-animation 0.6s ease-out forwards;
+            z-index: 0;
+            display: block;
+        }
+
+        @keyframes ripple-animation {
+            from {
+                transform: scale(0);
+                opacity: 0.6;
+            }
+            to {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
+
+        .btn-label, .btn-id {
+            position: relative;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        .btn-label {
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .btn-id {
+            font-size: 9px;
+            color: var(--primary);
+            font-family: monospace;
+            margin-bottom: 4px;
+            opacity: 0.8;
+            letter-spacing: 0.1em;
+        }
+
+        .footer {
+            margin-top: 40px;
+            font-size: 10px;
+            color: var(--text-dim);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            opacity: 0.5;
+        }
+    </style>
+</head>
+
+<body>
+
+<div id="loader">
+    <div class="spinner-container">
+        <div class="spinner"></div>
+    </div>
+</div>
+
+<!-- Installation Overlay -->
+<div id="install-overlay">
+    <div class="spinner-container">
+        <div class="spinner"></div>
+    </div>
+    <div class="install-text">Requesting Installation...</div>
+</div>
+
+<div class="card">
+    <div class="logo-container">
+        <div class="logo-glow"></div>
+        <img class="logo" src="https://github.com/8ygh/global/releases/download/icon/icon.png" alt="Ronix Logo" onerror="this.src='https://via.placeholder.com/100'">
+    </div>
+
+    <h1>Ronix iOS Global Direct Installs</h1>
+    <p class="subtitle">Direct Installation for iOS devices</p>
+
+    <div class="grid" id="btn-grid">
+        <div class="install-btn" data-href="itms-services://?action=download-manifest&url=https://raw.githubusercontent.com/8ygh/global/refs/heads/main/Commission.plist">
+            <span class="btn-id">REF_01</span>
+            <span class="btn-label">Commission</span>
+        </div>
+        <div class="install-btn" data-href="itms-services://?action=download-manifest&url=https://raw.githubusercontent.com/8ygh/global/refs/heads/main/Forevermark.plist">
+            <span class="btn-id">REF_02</span>
+            <span class="btn-label">Forevermark</span>
+        </div>
+        <div class="install-btn" data-href="itms-services://?action=download-manifest&url=https://raw.githubusercontent.com/8ygh/global/refs/heads/main/PowerChina.plist">
+            <span class="btn-id">REF_03</span>
+            <span class="btn-label">PowerChina</span>
+        </div>
+        <div class="install-btn" data-href="itms-services://?action=download-manifest&url=https://raw.githubusercontent.com/8ygh/global/refs/heads/main/Qingdao.plist">
+            <span class="btn-id">REF_04</span>
+            <span class="btn-label">Qingdao</span>
+        </div>
+        <div class="install-btn" data-href="itms-services://?action=download-manifest&url=https://raw.githubusercontent.com/8ygh/global/refs/heads/main/Railway.plist">
+            <span class="btn-id">REF_05</span>
+            <span class="btn-label">Railway</span>
+        </div>
+        <div class="install-btn" data-href="itms-services://?action=download-manifest&url=https://raw.githubusercontent.com/8ygh/global/refs/heads/main/Takeoff.plist">
+            <span class="btn-id">REF_06</span>
+            <span class="btn-label">Takeoff</span>
+        </div>
+        <div class="install-btn" data-href="itms-services://?action=download-manifest&url=https://raw.githubusercontent.com/8ygh/global/refs/heads/main/Telecom.plist">
+            <span class="btn-id">REF_07</span>
+            <span class="btn-label">Telecom</span>
+        </div>
+        <div class="install-btn" data-href="itms-services://?action=download-manifest&url=https://raw.githubusercontent.com/8ygh/global/refs/heads/main/Tianjin.plist">
+            <span class="btn-id">REF_08</span>
+            <span class="btn-label">Tianjin</span>
+        </div>
+    </div>
+
+    <div class="footer">
+        RONIX DIRECT INSTALLATION // @8ygh for links // @average_hacker for website
+    </div>
+</div>
+
+<script>
+    // Reveal UI when loaded
+    window.addEventListener('load', () => {
+        setTimeout(() => {
+            document.body.classList.add('loaded');
+        }, 400);
+    });
+
+    const buttons = document.querySelectorAll('.install-btn');
+    const installOverlay = document.getElementById('install-overlay');
+    
+    buttons.forEach(btn => {
+        const triggerInstall = (e) => {
+            // Prevent event doubling
+            e.preventDefault();
+
+            // Get coordinates for the ripple effect based on event type
+            let clientX, clientY;
+            if (e.type === 'touchend') {
+                clientX = e.changedTouches[0].clientX;
+                clientY = e.changedTouches[0].clientY;
+            } else {
+                clientX = e.clientX;
+                clientY = e.clientY;
+            }
+
+            const rect = btn.getBoundingClientRect();
+            const x = clientX - rect.left;
+            const y = clientY - rect.top;
+            
+            // 1. Create Visual Ripple
+            const ripple = document.createElement('span');
+            ripple.className = 'ripple';
+            const size = Math.max(rect.width, rect.height) * 2;
+            ripple.style.width = ripple.style.height = `${size}px`;
+            ripple.style.left = `${x - size/2}px`;
+            ripple.style.top = `${y - size/2}px`;
+            btn.appendChild(ripple);
+            ripple.addEventListener('animationend', () => ripple.remove());
+
+            // 2. Show Install Progress Overlay
+            installOverlay.classList.add('active');
+
+            // 3. Trigger iOS Install Popup
+            const url = btn.getAttribute('data-href');
+            if (url) {
+                setTimeout(() => {
+                    window.location.href = url;
+                    
+                    // Hide the overlay after 3 seconds, as the prompt should have appeared
+                    // and we want the UI to be usable again if they cancel.
+                    setTimeout(() => {
+                        installOverlay.classList.remove('active');
+                    }, 3000);
+                }, 150);
+            }
+        };
+
+        btn.addEventListener('click', triggerInstall);
+    });
+</script>
+
+</body>
+</html>
